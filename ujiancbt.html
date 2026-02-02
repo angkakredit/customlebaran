@@ -3,27 +3,24 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CBT Nasional SUPER DASHBOARD</title>
-
-<!-- Library -->
-<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+<title>CBT Nasional ANBK</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://unpkg.com/html5-qrcode"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/face-api.js"></script>
-
 <style>
 body{font-family:Arial;background:#f4f6f9;margin:0;padding:20px}
 .card{background:#fff;padding:20px;border-radius:10px;box-shadow:0 0 10px rgba(0,0,0,.1);margin-bottom:20px}
 button{padding:10px 15px;border:none;border-radius:6px;background:#2b7cff;color:#fff;cursor:pointer;margin:5px 0;}
 input,select,textarea{width:100%;padding:8px;margin:5px 0 10px;border-radius:6px;border:1px solid #ccc}
-video,audio,img{margin-top:10px;max-width:200px;border-radius:6px}
-.question{margin-bottom:15px}
+.sidebar{float:left;width:80px;margin-right:20px;background:#e0e0e0;padding:10px;border-radius:10px}
+.sidebar button{width:100%;margin-bottom:5px;}
+.main{overflow:hidden;}
 #dashboard{width:100%;height:400px}
 </style>
 </head>
 <body>
 
+<!-- LOGIN -->
 <div class="card" id="loginBox">
 <h2>Login CBT Nasional</h2>
 <input id="username" placeholder="Username">
@@ -36,176 +33,168 @@ video,audio,img{margin-top:10px;max-width:200px;border-radius:6px}
 <!-- UJIAN SISWA -->
 <div class="card" id="examBox" style="display:none">
 <h2>Ujian Online</h2>
-<div id="questions"></div>
+<div class="main">
+  <div class="sidebar" id="questionNav"></div>
+  <div id="questions"></div>
+</div>
 <div class="question">
 <b>Jawaban Esai:</b>
 <textarea id="essayAnswer" placeholder="Tulis jawaban esai disini..." rows="4"></textarea>
 </div>
-<video id="video" autoplay muted></video>
+<video id="video" autoplay muted width="200"></video>
+<div>Timer: <span id="timer">00:00</span></div>
 <button onclick="finishExam()">Selesai Ujian</button>
 </div>
 
 <!-- MENU GURU -->
 <div class="card" id="guruBox" style="display:none">
 <h2>Menu Guru</h2>
-<h3>Import Soal Excel</h3>
-<input type="file" id="fileInput" accept=".xlsx">
-<button onclick="uploadExcel()">Upload Soal</button>
-<h3>Generator Soal HOTS</h3>
-<input id="topikHOTS" placeholder="Masukkan topik">
-<button onclick="generateHOTS()">Buat Soal HOTS</button>
-<div id="hasilHOTS"></div>
 
-<h3>Dashboard Nasional</h3>
+<h3>CRUD Soal</h3>
+<input id="idSoal" placeholder="ID Soal">
+<input id="mapel" placeholder="Mata Pelajaran">
+<input id="kelas" placeholder="Kelas">
+<input id="soalText" placeholder="Soal">
+<input id="A" placeholder="A">
+<input id="B" placeholder="B">
+<input id="C" placeholder="C">
+<input id="D" placeholder="D">
+<input id="jawaban" placeholder="Jawaban">
+<button onclick="tambahSoal()">Tambah Soal</button>
+<button onclick="editSoal()">Edit Soal</button>
+<button onclick="hapusSoal()">Hapus Soal</button>
+
+<h3>Hasil Siswa Sekolah</h3>
+<table border="1" id="hasilTable">
+<tr><th>Nama</th><th>Kelas</th><th>Skor</th><th>Persen</th><th>Status</th><th>Foto</th></tr>
+</table>
+
+<h3>Dashboard</h3>
 <canvas id="dashboard"></canvas>
 <button onclick="loadDashboard()">Refresh Dashboard</button>
 </div>
 
 <script>
-const WEB_APP_URL="https://script.google.com/macros/s/AKfycbxZrQAhxjvkSIKjPPcFIs6d_xCNdHJShmvw_FHPGQtESzpr9_DHmDeuS6eNbGgkP08g/exec";
+const WEB_APP_URL="https://script.google.com/macros/s/AKfycbw7CLomaJR8yIH2c4bC_d5PTTJqL-x-ITzuI6WJgqBysWg2BaxptSAl8DNjnAD419p9/exec";
 
-let studentName="", studentUser="", violationCount=0;
-let violationPhoto="", studentLocation="", questions=[], score=0;
+let studentName="", studentUser="", studentKelas="", studentSekolah="";
+let questions=[], currentQuestion=0, timerInterval;
+let violationCount=0, violationPhoto="", studentLocation="";
 
 // ===== LOGIN =====
 function loginUser(){
   const u=username.value, p=password.value;
   if(!u||!p) return alert("Isi username & password");
-  fetch(`${WEB_APP_URL}?mode=login&u=${u}&p=${p}`).then(r=>r.json()).then(data=>{
+  fetch(WEB_APP_URL,{method:"POST",body:JSON.stringify({mode:"login",username:u,password:p})})
+  .then(r=>r.json()).then(data=>{
     if(!data.status){alert("Login gagal"); return;}
-    studentName=data.nama; studentUser=data.username;
-    if(data.role=="guru"){loginBox.style.display="none"; guruBox.style.display="block"; loadDashboard();}
-    else startExam();
-  });
-}
-function startQRLogin(){
-  const qr=new Html5Qrcode("reader");
-  qr.start({facingMode:"environment"}, {}, txt=>{
-    let [u,p]=txt.split("|");
-    username.value=u; password.value=p;
-    qr.stop(); loginUser();
+    if(data.role==="guru"){loginBox.style.display="none"; guruBox.style.display="block"; loadDashboard(); loadHasil();}
+    else{
+      studentName=data.nama; studentUser=data.username; studentKelas=data.kelas; studentSekolah=data.idSekolah;
+      loginBox.style.display="none"; examBox.style.display="block"; loadQuestions(); startTimer(30); startCamera(); getLocation();
+    }
   });
 }
 
-// ===== UJIAN =====
-function startExam(){
-  loginBox.style.display="none"; examBox.style.display="block";
-  loadQuestions(); startCamera(); getLocation();
-  setInterval(monitorFace,5000);
-}
-function shuffle(a){return a.sort(()=>Math.random()-0.5);}
+// ===== AMBIL SOAL SESUAI KELAS =====
 function loadQuestions(){
-  fetch(`${WEB_APP_URL}?mode=soal`).then(r=>r.json()).then(data=>{
-    questions=shuffle(data).slice(0,10); renderQuestions();
+  fetch(WEB_APP_URL,{method:"POST",body:JSON.stringify({mode:"getSoal",username:studentUser})})
+  .then(r=>r.json()).then(data=>{
+    questions=data;
+    renderSidebar(); renderQuestion();
   });
 }
-function renderQuestions(){
-  questionsDiv=document.getElementById("questions"); questionsDiv.innerHTML="";
+
+function renderSidebar(){
+  let nav=questionNav; nav.innerHTML="";
   questions.forEach((q,i)=>{
-    const div=document.createElement("div"); div.className="question";
-    let imgHTML=q[4]?`<img src="${q[4]}">`:"";
-    let audioHTML=q[5]?`<audio controls src="${q[5]}"></audio>`:"";
-    let opsi=shuffle([q[6],q[7],q[8],q[9]]);
-    div.innerHTML=`<p>${i+1}. ${q[3]}</p>${imgHTML}${audioHTML}`+
-      opsi.map(o=>`<label><input type='radio' name='q${i}' value='${o}'> ${o}</label><br>`).join("");
-    questionsDiv.appendChild(div);
+    let btn=document.createElement("button"); btn.innerText=i+1; btn.onclick=()=>{currentQuestion=i; renderQuestion();};
+    nav.appendChild(btn);
   });
 }
 
-// ===== KAMERA + DETEKSI WAJAH =====
-function startCamera(){
-  navigator.mediaDevices.getUserMedia({video:true}).then(s=>video.srcObject=s);
+function renderQuestion(){
+  let q=questions[currentQuestion];
+  let html=`<p>${currentQuestion+1}. ${q.soal}</p>`;
+  if(q.gambar) html+=`<img src="${q.gambar}" width="200"><br>`;
+  if(q.audio) html+=`<audio controls src="${q.audio}"></audio><br>`;
+  ['A','B','C','D'].forEach(o=>{
+    html+=`<label><input type="radio" name="q${currentQuestion}" value="${q[o]}"> ${q[o]}</label><br>`;
+  });
+  questions.innerHTML=html;
 }
-function capturePhoto(){
-  let c=document.createElement("canvas");
-  c.width=video.videoWidth; c.height=video.videoHeight;
-  c.getContext("2d").drawImage(video,0,0);
-  violationPhoto=c.toDataURL();
-}
-async function monitorFace(){
-  const d=await faceapi.detectAllFaces(video);
-  if(d.length!==1){violationCount++; capturePhoto();}
-}
-function getLocation(){navigator.geolocation.getCurrentPosition(p=>{studentLocation=p.coords.latitude+","+p.coords.longitude;});}
-document.addEventListener("visibilitychange",()=>{if(document.hidden){violationCount++; capturePhoto();}});
 
-// ===== SKOR & ESAI =====
-function calculateScore(){
-  score=0;
+// ===== TIMER =====
+function startTimer(mins){
+  let sec=mins*60;
+  timerInterval=setInterval(()=>{
+    let m=Math.floor(sec/60), s=sec%60;
+    timer.innerText=(m<10?'0'+m:m)+":"+(s<10?'0'+s:s);
+    if(sec<=0){clearInterval(timerInterval); finishExam();}
+    sec--;
+  },1000);
+}
+
+// ===== CAMERA + ANTI CHEATING =====
+function startCamera(){navigator.mediaDevices.getUserMedia({video:true}).then(s=>video.srcObject=s);}
+document.addEventListener("visibilitychange",()=>{if(document.hidden){violationCount++; capturePhoto();}});
+function capturePhoto(){
+  let c=document.createElement("canvas"); c.width=video.videoWidth; c.height=video.videoHeight;
+  c.getContext("2d").drawImage(video,0,0); violationPhoto=c.toDataURL();
+}
+
+// ===== LOCATION =====
+function getLocation(){navigator.geolocation.getCurrentPosition(p=>{studentLocation=p.coords.latitude+","+p.coords.longitude;});}
+
+// ===== FINISH =====
+function finishExam(){
+  let score=0;
   questions.forEach((q,i)=>{
     let ans=document.querySelector(`input[name=q${i}]:checked`);
-    if(ans && ans.value==q[10]) score++;
+    if(ans && ans.value===q.jawaban) score++;
   });
-  return score;
-}
-function analisaEsai(teks){
-  if(!teks) return 0;
-  let skor=0;
-  if(teks.length>50) skor+=40;
-  if(teks.match(/karena|sebab|fungsi|proses|penting/i)) skor+=30;
-  if(teks.split(" ").length>20) skor+=30;
-  return skor>100?100:skor;
-}
-function finishExam(){
-  let total=questions.length;
-  let nilai=calculateScore();
-  let persen=(nilai/total)*100;
-  let cheat="Aman";
-  if(violationCount>=1 && violationCount<=2) cheat="Mencurigakan";
-  if(violationCount>2) cheat="Terindikasi Curang";
-  let nilaiEsai = analisaEsai(essayAnswer.value);
-  sendResult(nilai,total,persen,cheat,nilaiEsai);
-  generatePDF(persen,cheat,nilaiEsai);
-  alert(`Nilai Pilihan Ganda: ${persen.toFixed(1)}%\nNilai Esai: ${nilaiEsai}\nStatus: ${cheat}`);
+  let persen=(score/questions.length)*100;
+  let cheat="Aman"; if(violationCount>=1 && violationCount<=2) cheat="Mencurigakan"; if(violationCount>2) cheat="Terindikasi Curang";
+  fetch(WEB_APP_URL,{method:"POST",body:JSON.stringify({
+    mode:"submit", nama:studentName, username:studentUser, idSekolah:studentSekolah, kelas:studentKelas,
+    skor:score, total:questions.length, persen, pelanggaran:violationCount, statusKecurangan:cheat,
+    lokasi:studentLocation,foto:violationPhoto,esai:document.getElementById("essayAnswer").value,nilaiEsai:0
+  })}).then(r=>alert("Ujian selesai! Nilai: "+persen.toFixed(1)+"%"));
 }
 
-// ===== SEND & PDF =====
-function sendResult(skor,total,persen,cheat,nilaiEsai){
-  fetch(WEB_APP_URL+"?mode=submit",{method:"POST",body:JSON.stringify({nama:studentName, username:studentUser, skor,total,persen,pelanggaran:violationCount,statusKecurangan:cheat,lokasi:studentLocation,foto:violationPhoto,esai:essayAnswer.value,nilaiEsai})});
+// ===== CRUD GURU =====
+function tambahSoal(){
+  fetch(WEB_APP_URL,{method:"POST",body:JSON.stringify({
+    mode:"tambahSoal",
+    idSoal:idSoal.value,
+    mapel:mapel.value,
+    idSekolah:"", // bisa isi otomatis sesuai guru
+    kelas:kelas.value,
+    idGuru:"", // isi username guru
+    soal:soalText.value,
+    gambar:"",
+    audio:"",
+    A:A.value,B:B.value,C:C.value,D:D.value,
+    jawaban:jawaban.value
+  })}).then(r=>r.json()).then(d=>{if(d.status) alert("Soal berhasil ditambah!");});
 }
-function generatePDF(percent, cheat, nilaiEsai){
-  const {jsPDF}=window.jspdf;
-  let doc=new jsPDF();
-  doc.text("LAPORAN HASIL UJIAN",20,20);
-  doc.text("Nama: "+studentName,20,40);
-  doc.text("Nilai Pilihan Ganda: "+percent.toFixed(1)+"%",20,50);
-  doc.text("Nilai Esai: "+nilaiEsai,20,60);
-  doc.text("Status: "+cheat,20,70);
-  doc.save("hasil_ujian.pdf");
-}
+function editSoal(){/* mirip tambah tapi mode edit */}
+function hapusSoal(){/* mirip tambah tapi mode hapus */}
 
-// ===== IMPORT EXCEL =====
-function uploadExcel(){
-  const file=document.getElementById('fileInput').files[0];
-  if(!file) return alert("Pilih file dulu");
-  const reader=new FileReader();
-  reader.onload=function(e){
-    const data=new Uint8Array(e.target.result);
-    const wb=XLSX.read(data,{type:'array'});
-    const sheet=wb.Sheets[wb.SheetNames[0]];
-    const json=XLSX.utils.sheet_to_json(sheet);
-    fetch(WEB_APP_URL+"?mode=importSoal",{method:"POST",body:JSON.stringify(json)}).then(r=>r.text()).then(res=>alert("Import berhasil!"));
-  };
-  reader.readAsArrayBuffer(file);
-}
-
-// ===== GENERATOR HOTS =====
-function generateHOTS(){
-  let topik=document.getElementById("topikHOTS").value;
-  if(!topik) return alert("Isi topik dulu");
-  fetch(WEB_APP_URL+"?mode=generateHOTS&topik="+encodeURIComponent(topik))
-  .then(r=>r.json()).then(data=>{
-    hasilHOTS.innerHTML=`<b>Soal:</b> ${data.soal}<br>A. ${data.A}<br>B. ${data.B}<br>C. ${data.C}<br>D. ${data.D}<br><b>Jawaban:</b> ${data.jawaban}`;
-  });
-}
-
-// ===== DASHBOARD NASIONAL =====
+// ===== DASHBOARD =====
 function loadDashboard(){
-  fetch(WEB_APP_URL+"?mode=hasil").then(r=>r.json()).then(data=>{
-    const labels=data.map(d=>d.nama);
-    const scores=data.map(d=>d.persen);
+  fetch(WEB_APP_URL,{method:"POST",body:JSON.stringify({mode:"getHasil",username:username.value})})
+  .then(r=>r.json()).then(data=>{
+    const labels=data.map(d=>d.nama), scores=data.map(d=>d.persen);
     const ctx=document.getElementById("dashboard").getContext("2d");
-    new Chart(ctx,{type:"bar",data:{labels, datasets:[{label:"Nilai (%)", data:scores, backgroundColor:"rgba(43,124,255,0.6)"}]},options:{scales:{y:{beginAtZero:true}}}});
+    new Chart(ctx,{type:"bar",data:{labels,datasets:[{label:"Nilai (%)",data:scores,backgroundColor:"rgba(43,124,255,0.6)"}]},options:{scales:{y:{beginAtZero:true}}}});
+    let table=document.getElementById("hasilTable"); table.innerHTML="<tr><th>Nama</th><th>Kelas</th><th>Skor</th><th>Persen</th><th>Status</th><th>Foto</th></tr>";
+    data.forEach(d=>{
+      let tr=table.insertRow();
+      tr.insertCell(0).innerText=d.nama; tr.insertCell(1).innerText=d.kelas;
+      tr.insertCell(2).innerText=d.skor; tr.insertCell(3).innerText=d.persen;
+      tr.insertCell(4).innerText=d.status; tr.insertCell(5).innerHTML=`<a href='${d.foto}' target='_blank'>Lihat Foto</a>`;
+    });
   });
 }
 </script>
