@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ujian Online</title>
+<style>
+body { font-family: Arial, sans-serif; background:#f4f6f9; margin:0; padding:20px; }
+.container { max-width:800px; margin:auto; background:white; padding:20px; border-radius:10px; box-shadow:0 0 10px rgba(0,0,0,0.1); }
+h1 { text-align:center; }
+.question { margin-bottom:20px; }
+button { padding:10px 15px; border:none; border-radius:6px; cursor:pointer; background:#1976d2; color:white; }
+button:hover { background:#0d47a1; }
+#timer { font-weight:bold; color:red; text-align:right; }
+.hidden { display:none; }
+</style>
+</head>
+<body oncontextmenu="return false">
+
+<div class="container">
+    <h1>Ujian Online</h1>
+    <div id="timer">Sisa Waktu: 10:00</div>
+
+    <div id="startScreen">
+        <p>Tekan tombol di bawah untuk memulai ujian.</p>
+        <button onclick="startExam()">Mulai Ujian</button>
+    </div>
+
+    <form id="examForm" class="hidden"></form>
+
+    <div id="result" class="hidden"></div>
+</div>
+
+<script>
+// ====== DATA SOAL ======
+let questions = [
+    {q:"Apa ibukota Indonesia?", options:["Jakarta","Bandung","Surabaya","Medan"], answer:0},
+    {q:"2 + 5 = ?", options:["5","6","7","8"], answer:2},
+    {q:"Planet terbesar?", options:["Bumi","Mars","Jupiter","Venus"], answer:2}
+];
+
+// ====== VARIABEL ======
+let timeLeft = 600; // 10 menit
+let timerInterval;
+let warningCount = 0;
+let maxWarnings = 2;
+
+// ====== ACAK SOAL ======
+questions.sort(() => Math.random() - 0.5);
+
+// ====== MULAI UJIAN ======
+function startExam(){
+    document.getElementById("startScreen").classList.add("hidden");
+    document.getElementById("examForm").classList.remove("hidden");
+    enterFullscreen();
+    startTimer();
+    renderQuestions();
+}
+
+// ====== FULLSCREEN ======
+function enterFullscreen() {
+    let el = document.documentElement;
+    if (el.requestFullscreen) el.requestFullscreen();
+}
+
+// ====== TIMER ======
+function startTimer(){
+    timerInterval = setInterval(() => {
+        timeLeft--;
+        let minutes = Math.floor(timeLeft/60);
+        let seconds = timeLeft%60;
+        document.getElementById("timer").innerText =
+            "Sisa Waktu: " + minutes + ":" + (seconds<10?"0":"") + seconds;
+
+        if(timeLeft <= 0) finishExam();
+    }, 1000);
+}
+
+// ====== TAMPILKAN SOAL ======
+function renderQuestions(){
+    let form = document.getElementById("examForm");
+    questions.forEach((item, index) => {
+        let div = document.createElement("div");
+        div.classList.add("question");
+
+        let q = document.createElement("p");
+        q.innerText = (index+1) + ". " + item.q;
+        div.appendChild(q);
+
+        let shuffledOptions = item.options
+            .map((opt,i)=>({opt,i}))
+            .sort(()=>Math.random()-0.5);
+
+        shuffledOptions.forEach(choice=>{
+            let label = document.createElement("label");
+            label.innerHTML = `<input type="radio" name="q${index}" value="${choice.i}"> ${choice.opt}`;
+            div.appendChild(label);
+            div.appendChild(document.createElement("br"));
+        });
+
+        form.appendChild(div);
+    });
+
+    let btn = document.createElement("button");
+    btn.type = "button";
+    btn.innerText = "Selesai Ujian";
+    btn.onclick = finishExam;
+    form.appendChild(btn);
+}
+
+// ====== SELESAI UJIAN ======
+function finishExam(){
+    clearInterval(timerInterval);
+    document.getElementById("examForm").classList.add("hidden");
+    document.getElementById("result").classList.remove("hidden");
+
+    let score = 0;
+    questions.forEach((q,i)=>{
+        let ans = document.querySelector(`input[name=q${i}]:checked`);
+        if(ans && ans.value == q.answer) score++;
+    });
+
+    document.getElementById("result").innerHTML =
+        `<h2>Ujian Selesai</h2>
+         <p>Skor Anda: <b>${score} / ${questions.length}</b></p>`;
+}
+
+// ====== ANTI PINDAH TAB ======
+document.addEventListener("visibilitychange", function() {
+    if(document.hidden){
+        warningCount++;
+        alert("Jangan pindah tab! Peringatan: " + warningCount);
+        if(warningCount > maxWarnings){
+            alert("Terlalu banyak pelanggaran. Ujian selesai.");
+            finishExam();
+        }
+    }
+});
+
+// ====== BLOK COPY PASTE ======
+document.addEventListener("copy", e => e.preventDefault());
+document.addEventListener("paste", e => e.preventDefault());
+document.addEventListener("cut", e => e.preventDefault());
+
+// ====== BLOK TOMBOL DEV TOOLS SEDERHANA ======
+document.onkeydown = function(e) {
+    if (e.keyCode == 123) return false; // F12
+    if (e.ctrlKey && e.shiftKey && e.keyCode == 'I'.charCodeAt(0)) return false;
+};
+</script>
+
+</body>
+</html>
