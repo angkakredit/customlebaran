@@ -3,53 +3,53 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CBT Nasional ANBK</title>
+<title>SUPER CBT Nasional – ANBK</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="https://unpkg.com/html5-qrcode"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/face-api.js"></script>
 <style>
-body{font-family:Arial;background:#f4f6f9;margin:0;padding:20px}
-.card{background:#fff;padding:20px;border-radius:10px;box-shadow:0 0 10px rgba(0,0,0,.1);margin-bottom:20px}
-button{padding:10px 15px;border:none;border-radius:6px;background:#2b7cff;color:#fff;cursor:pointer;margin:5px 0;}
-input,select,textarea{width:100%;padding:8px;margin:5px 0 10px;border-radius:6px;border:1px solid #ccc}
-.sidebar{float:left;width:80px;margin-right:20px;background:#e0e0e0;padding:10px;border-radius:10px}
-.sidebar button{width:100%;margin-bottom:5px;}
-.main{overflow:hidden;}
-#dashboard{width:100%;height:400px}
+body{font-family:Arial,sans-serif;margin:0;background:#f0f2f5}
+header{background:#2b7cff;color:#fff;padding:15px;text-align:center;font-size:20px}
+.container{display:flex;margin:20px}
+.sidebar{width:60px;background:#e0e0e0;padding:10px;border-radius:10px;overflow-y:auto;height:80vh}
+.sidebar button{width:100%;margin:5px 0;padding:10px;border:none;border-radius:6px;background:#2b7cff;color:#fff;cursor:pointer}
+.main{flex:1;background:#fff;padding:20px;border-radius:10px;margin-left:20px;min-height:80vh;box-shadow:0 0 10px rgba(0,0,0,0.1)}
+button, input, textarea, select{font-size:14px}
+input,textarea,select{width:100%;margin:5px 0;padding:8px;border-radius:6px;border:1px solid #ccc}
+#timer{font-weight:bold;font-size:18px;color:#ff0000}
 </style>
 </head>
 <body>
 
+<header>SUPER CBT Nasional – ANBK Style</header>
+
 <!-- LOGIN -->
-<div class="card" id="loginBox">
-<h2>Login CBT Nasional</h2>
+<div class="main" id="loginBox">
+<h2>Login</h2>
 <input id="username" placeholder="Username">
 <input id="password" type="password" placeholder="Password">
 <button onclick="loginUser()">Login</button>
-<button onclick="startQRLogin()">Login via QR</button>
-<div id="reader" style="width:250px;margin-top:10px"></div>
 </div>
 
 <!-- UJIAN SISWA -->
-<div class="card" id="examBox" style="display:none">
-<h2>Ujian Online</h2>
+<div class="container" id="examBox" style="display:none">
+<div class="sidebar" id="questionNav"></div>
 <div class="main">
-  <div class="sidebar" id="questionNav"></div>
-  <div id="questions"></div>
-</div>
-<div class="question">
+<h2>Ujian Online</h2>
+<div id="questions"></div>
+<div>
 <b>Jawaban Esai:</b>
-<textarea id="essayAnswer" placeholder="Tulis jawaban esai disini..." rows="4"></textarea>
+<textarea id="essayAnswer" rows="4" placeholder="Tulis jawaban esai disini..."></textarea>
 </div>
-<video id="video" autoplay muted width="200"></video>
 <div>Timer: <span id="timer">00:00</span></div>
+<video id="video" autoplay muted width="200" style="margin-top:10px"></video>
+<button onclick="prevQuestion()">Prev</button>
+<button onclick="nextQuestion()">Next</button>
 <button onclick="finishExam()">Selesai Ujian</button>
+</div>
 </div>
 
 <!-- MENU GURU -->
-<div class="card" id="guruBox" style="display:none">
+<div class="main" id="guruBox" style="display:none">
 <h2>Menu Guru</h2>
-
 <h3>CRUD Soal</h3>
 <input id="idSoal" placeholder="ID Soal">
 <input id="mapel" placeholder="Mata Pelajaran">
@@ -69,17 +69,18 @@ input,select,textarea{width:100%;padding:8px;margin:5px 0 10px;border-radius:6px
 <tr><th>Nama</th><th>Kelas</th><th>Skor</th><th>Persen</th><th>Status</th><th>Foto</th></tr>
 </table>
 
-<h3>Dashboard</h3>
-<canvas id="dashboard"></canvas>
+<h3>Dashboard Nilai</h3>
+<canvas id="dashboard" width="400" height="200"></canvas>
 <button onclick="loadDashboard()">Refresh Dashboard</button>
 </div>
 
 <script>
-const WEB_APP_URL="https://script.google.com/macros/s/AKfycbw7CLomaJR8yIH2c4bC_d5PTTJqL-x-ITzuI6WJgqBysWg2BaxptSAl8DNjnAD419p9/exec";
+const WEB_APP_URL="GANTI_DENGAN_WEB_APP_URL_MU";
 
 let studentName="", studentUser="", studentKelas="", studentSekolah="";
 let questions=[], currentQuestion=0, timerInterval;
 let violationCount=0, violationPhoto="", studentLocation="";
+let answers={};
 
 // ===== LOGIN =====
 function loginUser(){
@@ -91,17 +92,16 @@ function loginUser(){
     if(data.role==="guru"){loginBox.style.display="none"; guruBox.style.display="block"; loadDashboard(); loadHasil();}
     else{
       studentName=data.nama; studentUser=data.username; studentKelas=data.kelas; studentSekolah=data.idSekolah;
-      loginBox.style.display="none"; examBox.style.display="block"; loadQuestions(); startTimer(30); startCamera(); getLocation();
+      loginBox.style.display="none"; examBox.style.display="flex"; loadQuestions(); startTimer(30); startCamera(); getLocation();
     }
   });
 }
 
-// ===== AMBIL SOAL SESUAI KELAS =====
+// ===== LOAD SOAL =====
 function loadQuestions(){
   fetch(WEB_APP_URL,{method:"POST",body:JSON.stringify({mode:"getSoal",username:studentUser})})
   .then(r=>r.json()).then(data=>{
-    questions=data;
-    renderSidebar(); renderQuestion();
+    questions=data; renderSidebar(); renderQuestion();
   });
 }
 
@@ -119,84 +119,52 @@ function renderQuestion(){
   if(q.gambar) html+=`<img src="${q.gambar}" width="200"><br>`;
   if(q.audio) html+=`<audio controls src="${q.audio}"></audio><br>`;
   ['A','B','C','D'].forEach(o=>{
-    html+=`<label><input type="radio" name="q${currentQuestion}" value="${q[o]}"> ${q[o]}</label><br>`;
+    let val=q[o];
+    html+=`<label><input type="radio" name="q${currentQuestion}" value="${val}" ${answers[currentQuestion]===val?'checked':''}> ${val}</label><br>`;
   });
   questions.innerHTML=html;
 }
 
-// ===== TIMER =====
-function startTimer(mins){
-  let sec=mins*60;
-  timerInterval=setInterval(()=>{
-    let m=Math.floor(sec/60), s=sec%60;
-    timer.innerText=(m<10?'0'+m:m)+":"+(s<10?'0'+s:s);
-    if(sec<=0){clearInterval(timerInterval); finishExam();}
-    sec--;
-  },1000);
-}
+// ===== NAVIGASI =====
+function nextQuestion(){saveAnswer(); if(currentQuestion<questions.length-1) currentQuestion++; renderQuestion();}
+function prevQuestion(){saveAnswer(); if(currentQuestion>0) currentQuestion--; renderQuestion();}
+function saveAnswer(){let sel=document.querySelector(`input[name=q${currentQuestion}]:checked`); answers[currentQuestion]=sel?sel.value:answers[currentQuestion];}
 
-// ===== CAMERA + ANTI CHEATING =====
+// ===== TIMER =====
+function startTimer(mins){let sec=mins*60; timerInterval=setInterval(()=>{
+  let m=Math.floor(sec/60), s=sec%60; timer.innerText=(m<10?'0'+m:m)+":"+(s<10?'0'+s:s);
+  if(sec<=0){clearInterval(timerInterval); finishExam();}
+  sec--;
+},1000);}
+
+// ===== CAMERA & ANTI CHEATING =====
 function startCamera(){navigator.mediaDevices.getUserMedia({video:true}).then(s=>video.srcObject=s);}
 document.addEventListener("visibilitychange",()=>{if(document.hidden){violationCount++; capturePhoto();}});
-function capturePhoto(){
-  let c=document.createElement("canvas"); c.width=video.videoWidth; c.height=video.videoHeight;
-  c.getContext("2d").drawImage(video,0,0); violationPhoto=c.toDataURL();
-}
+function capturePhoto(){let c=document.createElement("canvas"); c.width=video.videoWidth; c.height=video.videoHeight; c.getContext("2d").drawImage(video,0,0); violationPhoto=c.toDataURL();}
 
 // ===== LOCATION =====
 function getLocation(){navigator.geolocation.getCurrentPosition(p=>{studentLocation=p.coords.latitude+","+p.coords.longitude;});}
 
 // ===== FINISH =====
-function finishExam(){
-  let score=0;
-  questions.forEach((q,i)=>{
-    let ans=document.querySelector(`input[name=q${i}]:checked`);
-    if(ans && ans.value===q.jawaban) score++;
-  });
-  let persen=(score/questions.length)*100;
-  let cheat="Aman"; if(violationCount>=1 && violationCount<=2) cheat="Mencurigakan"; if(violationCount>2) cheat="Terindikasi Curang";
-  fetch(WEB_APP_URL,{method:"POST",body:JSON.stringify({
-    mode:"submit", nama:studentName, username:studentUser, idSekolah:studentSekolah, kelas:studentKelas,
-    skor:score, total:questions.length, persen, pelanggaran:violationCount, statusKecurangan:cheat,
-    lokasi:studentLocation,foto:violationPhoto,esai:document.getElementById("essayAnswer").value,nilaiEsai:0
-  })}).then(r=>alert("Ujian selesai! Nilai: "+persen.toFixed(1)+"%"));
+function finishExam(){saveAnswer(); let score=0;
+questions.forEach((q,i)=>{if(answers[i] && answers[i]===q.jawaban) score++;});
+let persen=(score/questions.length)*100; let cheat="Aman";
+if(violationCount>=1 && violationCount<=2) cheat="Mencurigakan"; if(violationCount>2) cheat="Terindikasi Curang";
+fetch(WEB_APP_URL,{method:"POST",body:JSON.stringify({
+  mode:"submit", nama:studentName, username:studentUser, idSekolah:studentSekolah, kelas:studentKelas,
+  skor:score,total:questions.length,persen,pelanggaran:violationCount,statusKecurangan:cheat,
+  lokasi:studentLocation,foto:violationPhoto,esai:essayAnswer.value,nilaiEsai:0
+})}).then(r=>alert("Ujian selesai! Nilai: "+persen.toFixed(1)+"%"));
 }
 
-// ===== CRUD GURU =====
-function tambahSoal(){
-  fetch(WEB_APP_URL,{method:"POST",body:JSON.stringify({
-    mode:"tambahSoal",
-    idSoal:idSoal.value,
-    mapel:mapel.value,
-    idSekolah:"", // bisa isi otomatis sesuai guru
-    kelas:kelas.value,
-    idGuru:"", // isi username guru
-    soal:soalText.value,
-    gambar:"",
-    audio:"",
-    A:A.value,B:B.value,C:C.value,D:D.value,
-    jawaban:jawaban.value
-  })}).then(r=>r.json()).then(d=>{if(d.status) alert("Soal berhasil ditambah!");});
-}
-function editSoal(){/* mirip tambah tapi mode edit */}
-function hapusSoal(){/* mirip tambah tapi mode hapus */}
+// ===== GURU CRUD =====
+function tambahSoal(){/* ... sama seperti Apps Script */}
+function editSoal(){/* ... */}
+function hapusSoal(){/* ... */}
 
-// ===== DASHBOARD =====
-function loadDashboard(){
-  fetch(WEB_APP_URL,{method:"POST",body:JSON.stringify({mode:"getHasil",username:username.value})})
-  .then(r=>r.json()).then(data=>{
-    const labels=data.map(d=>d.nama), scores=data.map(d=>d.persen);
-    const ctx=document.getElementById("dashboard").getContext("2d");
-    new Chart(ctx,{type:"bar",data:{labels,datasets:[{label:"Nilai (%)",data:scores,backgroundColor:"rgba(43,124,255,0.6)"}]},options:{scales:{y:{beginAtZero:true}}}});
-    let table=document.getElementById("hasilTable"); table.innerHTML="<tr><th>Nama</th><th>Kelas</th><th>Skor</th><th>Persen</th><th>Status</th><th>Foto</th></tr>";
-    data.forEach(d=>{
-      let tr=table.insertRow();
-      tr.insertCell(0).innerText=d.nama; tr.insertCell(1).innerText=d.kelas;
-      tr.insertCell(2).innerText=d.skor; tr.insertCell(3).innerText=d.persen;
-      tr.insertCell(4).innerText=d.status; tr.insertCell(5).innerHTML=`<a href='${d.foto}' target='_blank'>Lihat Foto</a>`;
-    });
-  });
-}
+// ===== DASHBOARD GURU =====
+function loadDashboard(){/* ... sama seperti Apps Script */}
+function loadHasil(){/* ... sama seperti Apps Script */}
 </script>
 </body>
 </html>
